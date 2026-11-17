@@ -1,0 +1,69 @@
+name: Telegram NFT Bot
+
+on:
+  # Страховка: если цепочка перезапусков оборвалась, бот поднимется снова
+  schedule:
+    - cron: "*/20 * * * *"
+  # Ручной запуск + автоперезапуск самого себя
+  workflow_dispatch:
+
+# Одновременно работает только ОДИН экземпляр бота (иначе Telegram вернёт Conflict).
+# Новый запуск ждёт в очереди, пока не завершится текущий, и сразу подхватывает работу.
+concurrency:
+  group: telegram-bot
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  actions: write   # нужен, чтобы бот запустил следующий цикл сам
+
+jobs:
+  run-bot:
+    runs-on: ubuntu-latest
+    # Лимит GitHub на одну джобу - 6 часов. Бот останавливается раньше (см. ниже)
+    timeout-minutes: 350
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run bot (5h 40m)
+        id: bot
+        env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          REDIS_URL: ${{ secrets.REDIS_URL }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          PARSER_PROXIES: ${{ secrets.PARSER_PROXIES }}
+          ADMIN_IDS: ${{ secrets.ADMIN_IDS }}
+          PYTHONUNBUFFERED: "1"
+        run: |
+          set +e
+          # SIGINT -> aiogram корректно останавливает polling, очередь, БД и Redis
+          timeout --signal=INT --kill-after=60 20400 python main.py
+          code=$?
+          echo "exit code: $code"
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      # Код 124 = штатная остановка по таймеру -> сразу запускаем следующий цикл.
+      # Если бот упал по ошибке, цикл не перезапускается мгновенно (чтобы не жечь минуты
+      # в бесконечном crash-loop), а поднимется по cron в течение ~20 минут.
+      - name: Start next cycle
+        if: steps.bot.outputs.code == '124'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run bot.yml --repo "${{ github.repository }}" --ref "${{ github.ref_name }}"
+
+      - name: Fail job if bot crashed
+        if: steps.bot.outputs.code != '124' && steps.bot.outputs.code != '0'
+        run: |
+          echo "Бот завершился с кодом ${{ steps.bot.outputs.code }}"
+          exit 1
