@@ -1,8 +1,11 @@
 name: Telegram NFT Bot
-
+run:
+  pip install playwright
+  playwright install chromium
 on:
-  # Страховка: если цепочка перезапусков оборвалась, бот поднимется снова
+  # Страховка: если человек перезапускает workflow, бот запустится снова
   schedule:
+    # Каждые 20 минут (без секунд)
     - cron: "*/20 * * * *"
   # Ручной запуск + автоперезапуск самого себя
   workflow_dispatch:
