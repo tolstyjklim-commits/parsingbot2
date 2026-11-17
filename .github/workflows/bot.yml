@@ -1,31 +1,22 @@
 name: Telegram NFT Bot
-run:
-  pip install playwright
-  playwright install chromium
+
 on:
-  # Страховка: если человек перезапускает workflow, бот запустится снова
   schedule:
-    # Каждые 20 минут (без секунд)
     - cron: "*/20 * * * *"
-  # Ручной запуск + автоперезапуск самого себя
   workflow_dispatch:
 
-# Одновременно работает только ОДИН экземпляр бота (иначе Telegram вернёт Conflict).
-# Новый запуск ждёт в очереди, пока не завершится текущий, и сразу подхватывает работу.
 concurrency:
   group: telegram-bot
   cancel-in-progress: false
 
 permissions:
   contents: read
-  actions: write   # нужен, чтобы бот запустил следующий цикл сам
+  actions: write
 
 jobs:
   run-bot:
     runs-on: ubuntu-latest
-    # Лимит GitHub на одну джобу - 6 часов. Бот останавливается раньше (см. ниже)
     timeout-minutes: 350
-
     steps:
       - uses: actions/checkout@v4
 
@@ -36,6 +27,11 @@ jobs:
 
       - name: Install dependencies
         run: pip install -r requirements.txt
+
+      - name: Install Playwright
+        run: |
+          pip install playwright
+          playwright install chromium
 
       - name: Run bot (5h 40m)
         id: bot
@@ -49,16 +45,12 @@ jobs:
           PYTHONUNBUFFERED: "1"
         run: |
           set +e
-          # SIGINT -> aiogram корректно останавливает polling, очередь, БД и Redis
           timeout --signal=INT --kill-after=60 20400 python main.py
           code=$?
           echo "exit code: $code"
           echo "code=$code" >> "$GITHUB_OUTPUT"
           exit 0
 
-      # Код 124 = штатная остановка по таймеру -> сразу запускаем следующий цикл.
-      # Если бот упал по ошибке, цикл не перезапускается мгновенно (чтобы не жечь минуты
-      # в бесконечном crash-loop), а поднимется по cron в течение ~20 минут.
       - name: Start next cycle
         if: steps.bot.outputs.code == '124'
         env:
