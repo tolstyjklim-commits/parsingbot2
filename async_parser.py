@@ -258,27 +258,38 @@ class AsyncGiftParser:
         self.proxy_index = (self.proxy_index + 1) % len(self.proxies)
         return proxy
     
-    async def _request(
+        async def _request(
         self,
         session: aiohttp.ClientSession,
         params: Dict,
         max_retries: int = 3
     ) -> Optional[Dict]:
-        """Выполнить HTTP запрос с ротацией прокси"""
+        """Выполнить HTTP запрос через браузер (обход Cloudflare)"""
+        from browser_parser import BrowserParser
+
+        parser = BrowserParser(self.api_url)
+        proxy = await self._get_next_proxy()
+
         for attempt in range(1, max_retries + 1):
-            async with self.semaphore:
-                proxy = await self._get_next_proxy()
-                
-                from user_agents import get_random_headers
-                request_headers = get_random_headers()
-                
-                try:
-                    print(f"🔄 Попытка {attempt}/{max_retries}")
-                    print(f"🌐 URL: {self.api_url}")
-                    print(f"📝 Параметры: {params}")
-                    print(f"🔌 Прокси: {proxy if proxy else 'Без прокси'}")
-                    print(f"🎭 User-Agent: {request_headers.get('User-Agent', 'N/A')[:80]}...")
-                    
+            try:
+                print(f"🔄 Попытка {attempt}/{max_retries}")
+                print(f"🌐 URL: {self.api_url}")
+                print(f"📝 Параметры: {params}")
+                print(f"🔌 Прокси: {proxy if proxy else 'Без прокси'}")
+
+                result = await parser.search(params, proxy=proxy)
+
+                if result is not None:
+                    print(f"✅ Успешно, получены данные")
+                    return result
+
+                print(f"❌ Попытка {attempt} провалилась")
+
+            except Exception as e:
+                print(f"❌ Ошибка попытки {attempt}: {e}")
+
+        print("❌ Все попытки провалились, возвращаю None")
+        return None
                     async with session.get(
                         self.api_url,
                         params=params,
