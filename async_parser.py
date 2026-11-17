@@ -282,7 +282,14 @@ class AsyncGiftParser:
                     async with session.get(
                         self.api_url,
                         params=params,
-                        headers=request_headers,  # 🔥 ИСПОЛЬЗУЕМ РАНДОМНЫЕ ЗАГОЛОВКИ
+                        headers={
+    **request_headers,
+    "Accept": "application/json, text/plain, */*",
+    "Accept-Encoding": "gzip, deflate, br",
+    "Accept-Language": "ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7",
+    "Referer": "https://peek.tg/",
+    "Origin": "https://peek.tg",
+},  # 🔥 ИСПОЛЬЗУЕМ РАНДОМНЫЕ ЗАГОЛОВКИ
                         timeout=aiohttp.ClientTimeout(total=20),
                         proxy=proxy if proxy else None
                     ) as response:
