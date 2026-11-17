@@ -99,7 +99,7 @@ PARSER_RANGE_SIZE = 2000  # размер диапазона для рандом�
 #   http://user:pass@host:port
 # НЕ храните логины/пароли прокси в коде - репозиторий для GitHub Actions публичный.
  # Прокси (отключены)
-PARSER_PROXIES: List[str] = []
+PARSER_PROXIES: List[str] = _split_env_list("PARSER_PROXIES")
 
 PARSER_PROXY_FILE = None  # Или путь к файлу с прокси
 
